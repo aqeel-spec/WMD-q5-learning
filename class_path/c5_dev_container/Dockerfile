@@ -1,5 +1,5 @@
 FROM python:3.12 
-LABEL key="emial" maintainer="aqeelshahzad1215@gmail.com"
+# LABEL maintainer="aqeelshahzad1215@gmail.com"
 WORKDIR /c5
 # Install system dependencies required for potential Python packages
 RUN apt-get update && apt-get install -y \
