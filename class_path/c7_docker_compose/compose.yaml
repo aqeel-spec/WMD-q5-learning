@@ -1,0 +1,10 @@
+version: '1.0.0'
+name : "todo_fastapi_docker"
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: todo_container
+    ports:
+      - "8000:8000"
