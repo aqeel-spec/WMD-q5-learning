@@ -6,9 +6,11 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select, Sequence
 from fastapi import FastAPI, Depends
 from typing import AsyncGenerator
 
+
 class Todo(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     content: str = Field(index=True)
+
 
 # only needed for psycopg 3 - replace postgresql
 # with postgresql+psycopg in settings.DATABASE_URL
@@ -20,33 +22,33 @@ connection_string = str(settings.DATABASE_URL).replace(
 # recycle connections after 5 minutes
 # to correspond with the compute scale down
 engine = create_engine(
-    connection_string, pool_recycle=300
+    connection_string, connect_args={}, pool_recycle=300
 )
 
-def create_db_and_tables():
+#engine = create_engine(
+#    connection_string, connect_args={"sslmode": "require"}, pool_recycle=300
+#)
+
+
+def create_db_and_tables()->None:
     SQLModel.metadata.create_all(engine)
 
 
 # The first part of the function, before the yield, will
-# be executed before the application starts
+# be executed before the application starts.
+# https://fastapi.tiangolo.com/advanced/events/#lifespan-function
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
     print("Creating tables..")
     create_db_and_tables()
     yield
 
 
-app : FastAPI= FastAPI(
-    lifespan=lifespan,
-    title="Todo with FastAPI and Docker", 
+app = FastAPI(lifespan=lifespan, title="Hello World API with DB", 
     version="0.0.1",
     servers=[
         {
-            "url": "http://localhost:8000", # ADD NGROK URL Here Before Creating GPT Action
-            "description": "Development Server"
-        },
-        {
-            "url": "http://127.0.0.1:8000", # ADD NGROK URL Here Before Creating GPT Action
+            "url": "http://0.0.0.0:8000", # ADD NGROK URL Here Before Creating GPT Action
             "description": "Development Server"
         }
         ])
@@ -58,7 +60,7 @@ def get_session():
 
 @app.get("/")
 def read_root():
-    return {"Class_05": "Docker with FastAPI"}
+    return {"Hello": "World"}
 
 @app.post("/todos/", response_model=Todo)
 def create_todo(todo: Todo, session: Annotated[Session, Depends(get_session)])->Todo:

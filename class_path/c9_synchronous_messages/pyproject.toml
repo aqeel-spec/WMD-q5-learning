@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "app"
+version = "0.1.0"
+description = ""
+authors = ["Aqeel Shahzad <67902032+aqeel-spec@users.noreply.github.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.111.0"
+uvicorn = "^0.29.0"
+sqlmodel = {extras = ["postgresql"], version = "^0.0.18"}
+pydantic = {extras = ["postgresql"], version = "^2.7.1"}
+docker = "^7.0.0"
+python-docker = "^0.2.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
