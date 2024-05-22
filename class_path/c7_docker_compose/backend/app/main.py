@@ -10,32 +10,37 @@ class Todo(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     content: str = Field(index=True)
 
-# only needed for psycopg 3 - replace postgresql
-# with postgresql+psycopg in settings.DATABASE_URL
 connection_string = str(settings.DATABASE_URL).replace(
     "postgresql", "postgresql+psycopg"
 )
 
-# recycle connections after 5 minutes
-# to correspond with the compute scale down
 engine = create_engine(
     connection_string, connect_args={"sslmode": "require"}, pool_recycle=300
 )
-def create_db_and_tables():
-    SQLModel.metadata.create_all(engine)
+
+try:
+    # Ping the database
+    is_connected = engine.connect()
+    # print("Database connection successful.",is_connected)
+    if is_connected:
+        print("Database connection is active.")
+    else:
+        print("Database connection failed.")
+except Exception as e:
+    print(f"Error checking connection: {e}")
 
 
 # The first part of the function, before the yield, will
 # be executed before the application starts
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    print("Creating tables..")
-    create_db_and_tables()
-    yield
+# @asynccontextmanager
+# async def lifespan(app: FastAPI):
+#     print("Creating tables..")
+#     create_db_and_tables()
+#     yield
 
 
 app : FastAPI= FastAPI(
-    lifespan=lifespan,
+    # lifespan=lifespan,
     title="Todo with FastAPI and Docker", 
     version="0.0.1",
     servers=[
