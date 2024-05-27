@@ -22,7 +22,6 @@ def create_new_user(session : SessionDep, create_user : UserCreate):
 
 @router.get("/users/me/", response_model=User)
 def read_users_me( current_user: CurrentUser ):
-    print("login user",current_user)
     return current_user
 
 @router.get("/users", response_model=list[User])
