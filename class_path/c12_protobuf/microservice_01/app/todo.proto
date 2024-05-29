@@ -3,7 +3,7 @@ syntax = "proto3";
 import "google/protobuf/timestamp.proto";
 
 message Todo {
-  optional int32 id = 1;
+  int32 id = 1;
   string title = 2;
   string description = 3;
   bool completed = 4;

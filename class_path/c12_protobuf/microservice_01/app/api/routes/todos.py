@@ -14,75 +14,76 @@ from app import settings
 import json
 from app import todo_pb2
 
-router = APIRouter()
-async def get_kafka_producer():
-    producer = AIOKafkaProducer(bootstrap_servers='broker:19092')
-    await producer.start()
-    try:
-        yield producer
-    finally:
-        await producer.stop()
 
+# Temp
+from google.protobuf.timestamp_pb2 import Timestamp
+from typing import Tuple
+from confluent_kafka.serialization import StringSerializer, SerializationContext, MessageField
+from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry.protobuf import ProtobufSerializer
+from confluent_kafka import Producer
+
+router = APIRouter()
+
+SCHEMA_REGISTRY_URL = "http://schema-registry:8081"
+KAFKA_BROKER_URL = "broker:19092"
+
+def to_proto_timestamp(dt):
+    timestamp = Timestamp()
+    timestamp.FromDatetime(dt)
+    return timestamp
+
+async def get_kafka_producer():
+    producer_conf = {'bootstrap.servers': KAFKA_BROKER_URL}
+    schema_registry_conf = {'url': SCHEMA_REGISTRY_URL}
+    schema_registry_client = SchemaRegistryClient(schema_registry_conf)
+    serializer_config = {'use.deprecated.format': False}
+    serializer = ProtobufSerializer(todo_pb2.Todo, schema_registry_client, serializer_config)
+    producer = Producer(producer_conf)
+    try:
+        yield producer, serializer
+    finally:
+        producer.flush()
+
+class CustomProtobufSerializer(ProtobufSerializer):
+    def get_schema_registry_client(self):
+        return self._schema_registry_client
 
 @router.post("/todo/create")
-async def create_todo( session: Annotated[Session, Depends(get_session)], current_user: CurrentUser,todo: TodoCreate, producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)]):
-    db_todo = Todo.model_validate(todo,update={"user_id": current_user.id})
-    
+async def create_todo(
+    session: Annotated[Session, Depends(get_session)], 
+    current_user: CurrentUser, 
+    todo: TodoCreate, 
+    producer_dep: Annotated[Tuple[Producer, CustomProtobufSerializer], Depends(get_kafka_producer)]
+):
+    producer, serializer = producer_dep
+
+    db_todo = Todo(
+        **todo.dict(),
+        user_id=current_user.id
+    )
     session.add(db_todo)
     session.commit()
     session.refresh(db_todo)
-    
-    # Create a new Person message
-    todo_protobuf = todo_pb2.Todo()
-    todo_protobuf.id = db_todo.id
-    todo_protobuf.title = db_todo.title
-    todo_protobuf.description = db_todo.description
-    todo_protobuf.completed = db_todo.completed
-    todo_protobuf.user_id = db_todo.user_id
-    todo_protobuf.created_at.FromDatetime(db_todo.created_at)
-    todo_protobuf.updated_at.FromDatetime(db_todo.updated_at)
-    
-    print("todo_protobuf \n", todo_protobuf)
-    
-     # Serialize the message to a byte string
-    serialized_todo = todo_protobuf.SerializeToString()
-    print(f"Serialized data: {serialized_todo}")
-    
-    await producer.start()
-    
-    # Produce message
-    await producer.send_and_wait("todo", serialized_todo)
-    
-    
-    # for development server we will use 
-    # broker:9092
-    # producer=AIOKafkaProducer(bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVER) # settings.KAFKA_BOOTSTRAP_SERVER
-    # await producer.start()
-    
-    
-    # todoJson = json.dumps(db_todo.__dict__).encode("utf-8")
-    # Serialize the todo item to JSON
-    
-    # method 02
-    # todo_dict = {field: getattr(todo, field) for field in todo.dict()}
-    # todo_json = json.dumps(todo_dict).encode("utf-8")
-    
-    
-    # todoJson = db_todo.json().encode("utf-8")
 
-    # print("todoJson")
-    # print(todoJson)
+    todo_protobuf = todo_pb2.Todo(
+        id=db_todo.id,
+        title=db_todo.title,
+        description=db_todo.description,
+        completed=db_todo.completed,
+        created_at=to_proto_timestamp(db_todo.created_at),
+        updated_at=to_proto_timestamp(db_todo.updated_at),
+        user_id=db_todo.user_id
+    )
 
-    # await producer.send_and_wait(topic=settings.KAFKA_ADD_TOPIC, value=todoJson)
-    
-    # db_todo = Todo.model_validate(todo,update={"user_id": current_user.id})
-    # session.add(db_todo)
-    # session.commit()
-    # session.refresh(db_todo)
-    # return db_todo
+    todo_serialized = serializer(todo_protobuf, SerializationContext("todo", MessageField.VALUE))
+    producer.produce(topic='todo', value=todo_serialized, key=str(db_todo.id))
+    producer.flush()
+
     return db_todo
-        
     
+    
+
     
 
 @router.get("/todos/", response_model=list[Todo])
